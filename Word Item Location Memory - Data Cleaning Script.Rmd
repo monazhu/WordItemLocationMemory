@@ -1,0 +1,118 @@
+---
+title: "Object Location Memory 2: Data Cleaning"
+author: "Mona Zhu"
+date:  Updated November 26, 2020 
+output: 
+  html_document:
+    fig_width: 8
+    fig_height: 5
+    toc: true
+    toc_float: true
+    theme: yeti
+    highlight: tango
+    code_folding: show
+---
+
+<style>
+pre code, pre, code {
+  overflow-y: auto !important;
+  max-height: 20em;
+}
+</style>
+
+```{r setup}
+# setting global directory
+# knitr::opts_knit$set(root.dir = "...")
+
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(plyr, dplyr, tidyverse)
+
+```
+
+
+```{r data cleaning}
+# function to clean all .csv data in a given folder
+
+cleanData<- function (folder1, files, folder2){
+  for (file in files){
+    df<-read.csv(paste0(folder1, "/",file), na.strings=c("","NA"))
+    # skip reading incomplete files; that is, they must have reached the last question asking about their gender
+    if (is.na(first(na.omit(df$gender)))){
+      next
+    }
+    
+    ################## post-task questions ##################
+    
+    # finding the frist non-NA case in the column and replacing the column with that
+    df$grid.prefer<-first(na.omit(df$difficulty))
+    df$strategy<- first(na.omit(df$strategy))
+    df$data_quality<-first(na.omit(df$data_quality)) 
+    df$data_quality<-as.factor(car::recode(df$data_quality, "0='Bad'; 1='Good'")) # changing it from numeric class to character class
+    df$age<-first(na.omit(df$age))
+    df$gender<-first(na.omit(df$gender))
+
+    ################## math task #############################
+    
+    df[grep("font-size", df$stimulus),] %>% # for the math task
+      dplyr::group_by(block) %>% # split by block 1 vs block 2
+      dplyr::summarise(math.trial=length(math_answer), # calculate number of trials, number of correct items, and accuracy
+                    math.corr=sum(math_answer),
+                    math.prop=math.corr/math.trial) %>% 
+        as.data.frame() -> math.sum
+    
+    ################# object location memory task #################
+    
+    target.raw<-df[grep("Where was this", df$stimulus),]
+    
+    target.raw$condition<-ifelse(target.raw$order==1, # 1= semantic then scrambled; 2= screambled then semantic
+                                 rep(c("Semantic", "Scrambled"), each=10), 
+                                 rep(c("Scrambled", "Semantic"), each=10))
+
+
+    
+    # only look for trials that have button presses, and removing unnecessary columns
+    target<-target.raw[!is.na(target.raw$accuracy), 
+                       !(names(target.raw) %in% c("stimulus", "key_press", "time_elapsed",
+                                                "internal_node_id", "url", "value", "responses", "trial_type", "words_recalled"))]
+    
+
+    # calculate distance
+    target$dist<-sqrt((target$chosen_x-target$correct_x)^2+(target$chosen_y-target$correct_y)^2)
+    
+    # merge the math summary responses with the target items
+    target.agg<-merge(target, math.sum, by="block", all.x=T, all.y=F)
+    
+    # write file to drive
+    write.csv(target.agg, paste0(folder2, "/Location Memory_", df$participantID[1], "_", df$randomID[1], ".csv"), row.names = F)
+  }
+}
+
+```
+
+
+```{r, warning=F, message=F}
+
+folder1<- paste0(getwd(),"/Raw Data")
+
+folder2<- paste0(getwd(),"/Cleaned Data")
+
+files <- list.files(folder1, pattern = "[0-9]\\.csv$")
+
+cleanData(folder1, files, folder2)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

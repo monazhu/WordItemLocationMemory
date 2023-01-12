@@ -1,0 +1,85 @@
+---
+title: "Object Location Memory: Data Viz & Analysis"
+subtitle: <h2>Experiment 3A</h2>
+author: Mona Zhu
+date:  Updated February 16, 2021
+output: 
+  html_document:
+    fig_width: 10
+    fig_height: 7
+    toc: true
+    toc_float: true
+    theme: yeti
+    highlight: tango
+    code_folding: show
+---
+
+<style>
+pre code, pre, code {
+  overflow-y: auto !important;
+  max-height: 20em;
+}
+</style>
+
+
+
+```{r load libraries, message=F}
+# load libraries
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(plyr, reshape2, dplyr, tidyverse, ggplot2, wesanderson, lme4, sjPlot, effects, ggeffects)
+
+# setting contrast sum as the default model output
+options(contrasts=c('contr.sum','contr.poly'))
+```
+
+Read data files from folder:
+
+```{r}
+# load data
+folder<- paste0(getwd(), "/Cleaned Data") # folder (or path) that the data is in
+
+locmem.list <- list.files(folder, pattern = "^Location") #list all relevant cleaned files
+
+# location memory files
+df.raw<-NULL
+
+# create for loop to bind data
+for (file in locmem.list){
+  raw<-read.csv(paste0(folder, "/", file)) # read the memory sheet
+  # bind all participants' data into 1 data frame
+  df.raw<-rbind(df.raw, raw)
+}
+
+# applying exclusion criteria
+df.raw %>%
+  filter(data_quality=="Good" & # only include individuals who self-report having good data
+         math.trial>=11 & # completed at least 11 math questions
+         math.prop>=.7 ) %>% # above 70% correct
+  as.data.frame() -> df
+
+
+# recode which display was preferred (scrambled vs semantic)
+df$grid.prefer<-recode(df$grid.prefer, "All Words From Same Category" = "Semantic", 
+                            "All  Words From Different Categories"="Scrambled")
+
+# output summary file as csv
+write.csv(df, "Word Item Location Memory Cleaned Data_26Apr2022.csv", row.names = F)
+
+```
+
+<br>
+
+Check for number of participants
+
+
+```{r}
+paste0("Total Participants Run: ", length(unique(df$participantID)))
+
+paste0("Number of Participants after Exclusion Criteria Applied: ", length(unique(df$participantID)))
+
+```
+
+
+
+
+

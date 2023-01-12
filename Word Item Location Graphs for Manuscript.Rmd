@@ -1,0 +1,128 @@
+---
+title: "Object Location Memory Graphs for Manuscript (E1 & E2)"
+author: "Mona Zhu"
+date:  Updated October 31, 2022
+output: 
+  html_document:
+    fig_width: 8
+    fig_height: 5
+    toc: true
+    toc_float: true
+    theme: yeti
+    highlight: tango
+    code_folding: show
+---
+
+<style>
+pre code, pre, code {
+  overflow-y: auto !important;
+  max-height: 20em;
+}
+</style>
+```{r setup}
+# setting global directory
+knitr::opts_chunk$set(fig.show = "asis")
+```
+
+```{r load libraries, message=F}
+# load libraries
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(plyr, openxlsx, reshape2, dplyr, tidyverse, ggplot2, wesanderson, lme4, sjPlot, effects, ggeffects, flextable)
+
+# setting contrast sum as the default model output
+options(contrasts=c('contr.sum','contr.poly'))
+```
+
+```{r}
+plot.customization<-  theme(
+    panel.background= element_rect(fill=NA), # transparent panel
+    plot.background = element_rect(fill=NA, colour=NA), #transparent background
+    panel.grid=element_blank(), # remove panel grid
+    axis.ticks.x=element_blank(), # remove tick marks on x-axis
+    axis.ticks=element_line(colour="gray70"), # change colour of tick marks
+    panel.border = element_rect(fill="transparent", colour="gray70"), # change panel border colour
+    legend.background = element_rect(fill = "transparent", colour = "transparent"), # change legend background
+    axis.text = element_text(color="gray20"),
+    axis.text.x = element_text(size=16),
+    text=element_text(size=16),
+    axis.title.y = element_text(vjust=1.5),
+    legend.key = element_rect(fill = "transparent", colour = "transparent",),
+    strip.background = element_rect(color="gray70", fill="transparent", linetype="solid")
+    ,legend.position="none"
+  )
+
+```
+
+Read cleaned data
+
+```{r}
+# load data
+df<-read.csv("Word Item Location Memory Cleaned Data (E2)_26Apr2022.csv")
+
+# factorize variables
+df$condition<-factor(df$condition, levels = c("Semantic", "Scrambled"))
+df$grid.prefer<-factor(df$grid.prefer, levels = c("Semantic", "Scrambled"))
+df$block<-factor(recode(df$block, '1'="Block 1", '2'="Block 2"))
+
+# create a variable called "mixup" for looking at substitution 
+df$mixup<-ifelse(df$accuracy==0 & df$pos_accuracy==1, 1, 0)
+
+# create subsets for data frames for data analysis
+df.error<-subset(df, accuracy==0)
+
+# calculating near error (anything surrounding the target item)
+df.error$near.error<-ifelse(df.error$dist<=sqrt(2), 1, 0)
+
+```
+
+
+### Location Memory
+
+```{r}
+graph1<-ddply(df, c("randomID", "condition"), function(df)
+  return(c(dep.avg=mean(df$accuracy))))
+
+graph2<-ddply(graph1, c("condition"), function(df)
+  return(c(dep.avg=mean(df$dep.avg), 
+           dep.sd=sd(df$dep.avg), 
+           dep.count=length(df$dep.avg))))
+
+png(file = "E2_Location Accuracy_31Oct2022.png", bg = "white", type = c("cairo"), width=2400, height=1800, res=300)
+
+
+## graph
+ggplot(graph2, aes(x=condition, y=dep.avg, colour=condition))+
+  geom_point(size=6, shape=17, position = position_dodge(0.5))+
+  geom_point(data=graph1, aes(x=condition, y=dep.avg, colour=condition), 
+             shape = 16, position=position_jitterdodge(dodge.width=.5, 
+                                                       jitter.width = 0.35, 
+                                                       jitter.height = 0.01), alpha = 0.25)+
+  # geom_line()+
+  # stat_smooth(method="glm", method.args=list(family="binomial"), se=FALSE)+
+  geom_errorbar(aes(ymax=dep.avg+dep.sd*qt(0.975,df=dep.count-1)/sqrt(dep.count),
+                    ymin=dep.avg-dep.sd*qt(0.975,df=dep.count-1)/sqrt(dep.count)),
+                width=0.05, position = position_dodge(0.5))+
+    plot.customization+
+  scale_colour_manual("Condition", values=c("Semantic"="#FFB87E", "Scrambled"="#5F548A"))+
+  scale_y_continuous("Proportion Correct (Location Accuracy)", breaks=seq(-1, 1, 0.1))+
+  scale_x_discrete("")+
+  coord_cartesian(ylim = c(0, 1))
+
+
+
+```
+
+
+
+```{r}
+# png(file = "E2_Error Distance Distriution_16Feb2022.png", bg = "white", type = c("cairo"), width=2400, height=2600, res=300)
+
+cowplot::plot_grid(plot1, plot2, align = "h", nrow = 2, rel_heights = c(.55, .45), labels="AUTO", label_size = 16)
+```
+
+
+
+
+
+
+

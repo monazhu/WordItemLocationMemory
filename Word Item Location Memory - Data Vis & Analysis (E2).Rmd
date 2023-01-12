@@ -1,0 +1,840 @@
+---
+title: "Object Location Memory: Data Viz & Analysis"
+subtitle: <h2>Experiment 2</h2>
+author: Mona Zhu
+date:  Updated July 25, 2022
+output: 
+  html_document:
+    fig_width: 10
+    fig_height: 7
+    toc: true
+    toc_float: true
+    theme: yeti
+    highlight: tango
+    code_folding: show
+---
+
+<style>
+pre code, pre, code {
+  overflow-y: auto !important;
+  max-height: 20em;
+}
+</style>
+
+```{r setup}
+# setting global directory
+knitr::opts_chunk$set(fig.show = "asis")
+```
+
+```{r load libraries, message=F}
+# load libraries
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(plyr, openxlsx, reshape2, dplyr, tidyverse, ggplot2, wesanderson, lme4, sjPlot, effects, ggeffects, flextable)
+
+# setting contrast sum as the default model output
+options(contrasts=c('contr.sum','contr.poly'))
+```
+
+```{r}
+plot.customization<-  theme(
+    panel.background= element_rect(fill=NA), # transparent panel
+    plot.background = element_rect(fill=NA, colour=NA), #transparent background
+    panel.grid=element_blank(), # remove panel grid
+    axis.ticks.x=element_blank(), # remove tick marks on x-axis
+    axis.ticks=element_line(colour="gray70"), # change colour of tick marks
+    panel.border = element_rect(fill="transparent", colour="gray70"), # change panel border colour
+    legend.background = element_rect(fill = "transparent", colour = "transparent"), # change legend background
+    axis.text = element_text(color="gray20"),
+    axis.text.x = element_text(size=16),
+    text=element_text(size=16),
+    axis.title.y = element_text(vjust=1.5),
+    legend.key = element_rect(fill = "transparent", colour = "transparent",),
+    strip.background = element_rect(color="gray70", fill="transparent", linetype="solid")
+    ,legend.position="none"
+  )
+
+```
+
+Read cleaned data
+
+```{r}
+# load data
+df<-read.csv("Word Item Location Memory Cleaned Data (E2)_26Apr2022.csv")
+
+# factorize variables
+df$condition<-factor(df$condition, levels = c("Semantic", "Scrambled"))
+df$grid.prefer<-factor(df$grid.prefer, levels = c("Semantic", "Scrambled"))
+df$block<-factor(recode(df$block, '1'="Block 1", '2'="Block 2"))
+
+# create a variable called "mixup" for looking at substitution 
+df$mixup<-ifelse(df$accuracy==0 & df$pos_accuracy==1, 1, 0)
+
+# create subsets for data frames for data analysis
+df.error<-subset(df, accuracy==0)
+
+# calculating near error (anything surrounding the target item)
+df.error$near.error<-ifelse(df.error$dist<=sqrt(2), 1, 0)
+
+```
+
+
+
+# Demographics
+
+```{r}
+  df %>%
+    reshape2::dcast(randomID+strategy+gender+grid.prefer+age~condition, value.var = "accuracy", mean) %>%
+    as.data.frame -> df.sum
+
+# write strategy to file for coding
+# write.xlsx(df.sum[c(1,2)], "Object Location Memory E2 Strategy.xlsx", overwrite = F)
+```
+
+## Count of Participants
+
+```{r}
+folder<- paste0(getwd(), "/Cleaned Data") # folder (or path) that the data is in
+locmem.list <- list.files(folder, pattern = "^Location")
+
+paste0("Total Participants Run: ", length(unique(locmem.list)))
+
+paste0("Number of Participants after Exclusion Criteria Applied: ", length(unique(df$randomID)))
+
+```
+
+## Age 
+
+```{r}
+paste0("Mean Age of Final Sample: ", round(mean(df.sum$age, na.rm=T),2))
+
+paste0("SD Age of Final Sample: ", round(sd(df.sum$age, na.rm=T),2))
+```
+
+## Gender
+
+```{r}
+flextable(as.data.frame(table(df.sum$gender, dnn = list("Gender")), responseName = "Count"))
+```
+
+
+# Main Analyses + Data Visuzliation
+
+## Item-Location Binding
+
+### Location Accuracy {.tabset}
+
+Model
+
+```{r}
+# overall
+# loc.acc1<-glmer(accuracy~condition+(1|randomID)+(1|displayed), family="binomial", data=df,
+#                       control = glmerControl(optimizer="bobyqa"))
+loc.acc2<-glmer(accuracy~condition+(condition|randomID)+(1|displayed), family="binomial", data=df,
+                      control = glmerControl(optimizer="bobyqa"))
+# loc.acc3<-glmer(accuracy~condition+(1|randomID)+(condition|displayed), family="binomial", data=df,
+#                       control = glmerControl(optimizer="bobyqa"))
+# loc.acc4<-glmer(accuracy~condition+(condition|randomID)+(condition|displayed), family="binomial", data=df,
+#                       control = glmerControl(optimizer="bobyqa"))
+
+# anova(loc.acc1, loc.acc2) # model 2 is better
+# anova(loc.acc1, loc.acc3) # ns
+# anova(loc.acc2, loc.acc4) # ns
+
+# mod 2 is best model
+
+# with block
+# loc.acc.block1<-glmer(accuracy~condition*block+(1|randomID)+(1|displayed), family="binomial", data=df,
+#                       control = glmerControl(optimizer="bobyqa"))
+loc.acc.block2<-glmer(accuracy~condition*block+(condition|randomID)+(1|displayed), family="binomial", data=df,
+                      control = glmerControl(optimizer="bobyqa"))
+# loc.acc.block3<-glmer(accuracy~condition*block+(1|randomID)+(condition|displayed), family="binomial", data=df,
+#                       control = glmerControl(optimizer="bobyqa"))
+# loc.acc.block4<-glmer(accuracy~condition*block+(condition|randomID)+(condition|displayed), family="binomial", data=df,
+#                       control = glmerControl(optimizer="bobyqa"))
+# loc.acc.block5<-glmer(accuracy~condition*block+(block|randomID)+(1|displayed), family="binomial", data=df,
+#                       control = glmerControl(optimizer="bobyqa"))
+# loc.acc.block6<-glmer(accuracy~condition*block+(1|randomID)+(block|displayed), family="binomial", data=df,
+#                       control = glmerControl(optimizer="bobyqa")) 
+# loc.acc.block7<-glmer(accuracy~condition*block+(condition+block|randomID)+(1|displayed), family="binomial", data=df,
+#                       control = glmerControl(optimizer="bobyqa"))
+
+# anova(loc.acc.block1, loc.acc.block2) # model 2 is better
+# anova(loc.acc.block1, loc.acc.block3) # ns
+# anova(loc.acc.block1, loc.acc.block5) # model 5 better
+# anova(loc.acc.block1, loc.acc.block6) # ns
+# anova(loc.acc.block2, loc.acc.block5) # model 2 has slightly better AIC and BIC scores
+
+# model 2 best model
+
+tab_model(loc.acc2, loc.acc.block2, transform = NULL, show.stat = T,
+          dv.labels = c("Overall", "Block as Factor"))
+```
+
+<br>
+
+#### Overall
+
+
+```{r}
+graph1<-ddply(df, c("randomID", "condition"), function(df)
+  return(c(dep.avg=mean(df$accuracy))))
+
+graph2<-ddply(graph1, c("condition"), function(df)
+  return(c(dep.avg=mean(df$dep.avg), 
+           dep.sd=sd(df$dep.avg), 
+           dep.count=length(df$dep.avg))))
+
+# png("E2_Location Accuracy.png",
+#     width = 200, height = 120, res=300, unit="mm",
+#      bg = "white",
+#     type = "cairo")
+
+## graph
+ggplot(graph2, aes(x=condition, y=dep.avg, colour=condition))+
+  geom_point(size=6, shape=17, position = position_dodge(0.5))+
+  geom_point(data=graph1, aes(x=condition, y=dep.avg, colour=condition), 
+             shape = 16, position=position_jitterdodge(dodge.width=.5, 
+                                                       jitter.width = 0.35, 
+                                                       jitter.height = 0.01), alpha = 0.25)+
+  # geom_line()+
+  # stat_smooth(method="glm", method.args=list(family="binomial"), se=FALSE)+
+  geom_errorbar(aes(ymax=dep.avg+dep.sd*qt(0.975,df=dep.count-1)/sqrt(dep.count),
+                    ymin=dep.avg-dep.sd*qt(0.975,df=dep.count-1)/sqrt(dep.count)),
+                width=0.05, position = position_dodge(0.5))+
+    plot.customization+
+
+  # scale_colour_manual(labels=c("maroon", "maroon","maroon","maroon"))
+  scale_colour_manual("Condition", values=c("Semantic"=wes_palettes$GrandBudapest1[1], 
+                                            "Scrambled"=wes_palettes$GrandBudapest2[4]))+
+  scale_y_continuous("Proportion Correct (Location Accuracy)", breaks=seq(-1, 1, 0.1))+
+  scale_x_discrete("")+
+  coord_cartesian(ylim = c(0, 1))
+```
+
+#### By Block
+
+```{r}
+graph1<-ddply(df, c("randomID", "condition", "block"), function(df)
+  return(c(dep.avg=mean(df$accuracy))))
+
+graph2<-ddply(graph1, c("condition", "block"), function(df)
+  return(c(dep.avg=mean(df$dep.avg), 
+           dep.sd=sd(df$dep.avg), 
+           dep.count=length(df$dep.avg))))
+
+# png("E2_Location Accuracy.png",
+#     width = 200, height = 120, res=300, unit="mm",
+#      bg = "white",
+#     type = "cairo")
+
+## graph
+ggplot(graph2, aes(x=block, y=dep.avg, colour=condition))+
+  geom_point(size=6, shape=17, position = position_dodge(0.5))+
+  geom_point(data=graph1, aes(x=block, y=dep.avg, colour=condition), 
+             shape = 16, position=position_jitterdodge(dodge.width=.5, 
+                                                       jitter.width = 0.35, 
+                                                       jitter.height = 0.01), alpha = 0.25)+
+  # geom_line()+
+  # stat_smooth(method="glm", method.args=list(family="binomial"), se=FALSE)+
+  geom_errorbar(aes(ymax=dep.avg+dep.sd*qt(0.975,df=dep.count-1)/sqrt(dep.count),
+                    ymin=dep.avg-dep.sd*qt(0.975,df=dep.count-1)/sqrt(dep.count)),
+                width=0.05, position = position_dodge(0.5))+
+    plot.customization+
+
+  # scale_colour_manual(labels=c("maroon", "maroon","maroon","maroon"))
+  scale_colour_manual("Condition", values=c("Semantic"=wes_palettes$GrandBudapest1[1], 
+                                            "Scrambled"=wes_palettes$GrandBudapest2[4]))+
+  scale_y_continuous("Proportion Correct (Location Accuracy)", breaks=seq(-1, 1, 0.1))+
+  scale_x_discrete("")+
+  coord_cartesian(ylim = c(0, 1))
+```
+
+
+
+
+
+### Euclidean Distance {.tabset}
+
+Mode:
+
+```{r}
+# overall
+# euc.dist1<-lmer(dist~condition+(1|randomID)+(1|displayed), data=df,
+#                       control = lmerControl(optimizer="bobyqa"))
+euc.dist2<-lmer(dist~condition+(condition|randomID)+(1|displayed), data=df,
+                      control = lmerControl(optimizer="bobyqa"))
+# euc.dist3<-lmer(dist~condition+(1|randomID)+(condition|displayed), data=df,
+#                       control = lmerControl(optimizer="bobyqa")) # singular
+
+# anova(euc.dist1, euc.dist2) # model 2 is better model
+
+
+# model 2 best model
+
+# by block
+euc.dist.block1<-lmer(dist~condition*block+(1|randomID) + (1|displayed), data=df,
+                      control = lmerControl(optimizer="bobyqa"))
+euc.dist.block2<-lmer(dist~condition*block+(condition|randomID) + (1|displayed), data=df,
+                      control = lmerControl(optimizer="bobyqa"))
+euc.dist.block3<-lmer(dist~condition*block+(1|randomID) + (condition|displayed), data=df,
+                      control = lmerControl(optimizer="bobyqa")) # singular
+euc.dist.block4<-lmer(dist~condition*block+(block|randomID) + (1|displayed), data=df,
+                      control = lmerControl(optimizer="bobyqa"))
+euc.dist.block5<-lmer(dist~condition*block+(1|randomID) + (block|displayed), data=df,
+                      control = lmerControl(optimizer="bobyqa")) 
+
+# anova(euc.dist.block1, euc.dist.block2) # model 2 is better
+# anova(euc.dist.block1, euc.dist.block3) # ns
+# anova(euc.dist.block1, euc.dist.block4) # model 4 is better
+# anova(euc.dist.block1, euc.dist.block5) # ns
+# anova(euc.dist.block2, euc.dist.block4) # model 2 has better AIC / BIC
+
+# model 2 best model
+
+
+tab_model(euc.dist2, euc.dist.block2, transform = NULL, show.stat = T,
+          dv.labels = c("Overall", "Block as Factor"))
+```
+
+<p></p>
+
+#### Overall
+
+```{r}
+graph1<-ddply(df, c("randomID", "condition"), function(df)
+  return(c(dep.avg=mean(df$dist))))
+
+graph2<-ddply(graph1, c("condition"), function(df)
+  return(c(dep.avg=mean(df$dep.avg), 
+           dep.sd=sd(df$dep.avg), 
+           dep.count=length(df$dep.avg))))
+
+# png("E2_Location Accuracy.png",
+#     width = 200, height = 120, res=300, unit="mm",
+#      bg = "white",
+#     type = "cairo")
+
+## graph
+ggplot(graph2, aes(x=condition, y=dep.avg, colour=condition))+
+  geom_point(size=6, shape=17, position = position_dodge(0.5))+
+  geom_point(data=graph1, aes(x=condition, y=dep.avg, colour=condition), 
+             shape = 16, position=position_jitterdodge(dodge.width=.5, 
+                                                       jitter.width = 0.35, 
+                                                       jitter.height = 0.01), alpha = 0.25)+
+  # geom_line()+
+  # stat_smooth(method="glm", method.args=list(family="binomial"), se=FALSE)+
+  geom_errorbar(aes(ymax=dep.avg+dep.sd*qt(0.975,df=dep.count-1)/sqrt(dep.count),
+                    ymin=dep.avg-dep.sd*qt(0.975,df=dep.count-1)/sqrt(dep.count)),
+                width=0.05, position = position_dodge(0.5))+
+    plot.customization+
+
+  # scale_colour_manual(labels=c("maroon", "maroon","maroon","maroon"))
+  scale_colour_manual("Condition", values=c("Semantic"=wes_palettes$GrandBudapest1[1], 
+                                            "Scrambled"=wes_palettes$GrandBudapest2[4]))+
+  scale_y_continuous("Euclidean Distance", breaks=seq(-20, 20, 0.5))+
+  scale_x_discrete("")+
+  coord_cartesian(ylim = c(0, max(graph1$dep.avg)))
+```
+
+#### By Block
+
+```{r}
+graph1<-ddply(df, c("randomID", "condition", "block"), function(df)
+  return(c(dep.avg=mean(df$dist))))
+
+graph2<-ddply(graph1, c("condition", "block"), function(df)
+  return(c(dep.avg=mean(df$dep.avg), 
+           dep.sd=sd(df$dep.avg), 
+           dep.count=length(df$dep.avg))))
+
+# png("E2_Location Accuracy.png",
+#     width = 200, height = 120, res=300, unit="mm",
+#      bg = "white",
+#     type = "cairo")
+
+## graph
+ggplot(graph2, aes(x=block, y=dep.avg, colour=condition))+
+  geom_point(size=6, shape=17, position = position_dodge(0.5))+
+  geom_point(data=graph1, aes(x=block, y=dep.avg, colour=condition), 
+             shape = 16, position=position_jitterdodge(dodge.width=.5, 
+                                                       jitter.width = 0.35, 
+                                                       jitter.height = 0.01), alpha = 0.25)+
+  # geom_line()+
+  # stat_smooth(method="glm", method.args=list(family="binomial"), se=FALSE)+
+  geom_errorbar(aes(ymax=dep.avg+dep.sd*qt(0.975,df=dep.count-1)/sqrt(dep.count),
+                    ymin=dep.avg-dep.sd*qt(0.975,df=dep.count-1)/sqrt(dep.count)),
+                width=0.05, position = position_dodge(0.5))+
+    plot.customization+
+
+  # scale_colour_manual(labels=c("maroon", "maroon","maroon","maroon"))
+  scale_colour_manual("Condition", values=c("Semantic"=wes_palettes$GrandBudapest1[1], 
+                                            "Scrambled"=wes_palettes$GrandBudapest2[4]))+
+  scale_y_continuous("Euclidean Distance", breaks=seq(-20, 20, 0.5))+
+  scale_x_discrete("")+
+  coord_cartesian(ylim = c(0, max(graph1$dep.avg)))
+```
+
+
+
+
+
+### Error Distance {.tabset}
+
+Model
+
+```{r}
+# overall
+error.dist1<-lmer(dist~condition+(1|randomID)+(1|displayed), data=df.error,
+                      control = lmerControl(optimizer="bobyqa")) 
+# error.dist2<-lmer(dist~condition+(condition|randomID)+(1|displayed), data=df.error,
+#                       control = lmerControl(optimizer="bobyqa")) 
+# error.dist3<-lmer(dist~condition+(1|randomID)+(condition|displayed), data=df.error,
+#                       control = lmerControl(optimizer="bobyqa")) #singular
+
+# anova(error.dist1, error.dist2) # ns
+
+# model 1 is best model
+
+# by block
+error.dist.block1<-lmer(dist~condition*block+(1|randomID)+(1|displayed), data=df.error,
+                      control = lmerControl(optimizer="bobyqa"))
+# error.dist.block2<-lmer(dist~condition*block+(condition|randomID)+(1|displayed), data=df.error,
+#                       control = lmerControl(optimizer="bobyqa"))
+# error.dist.block3<-lmer(dist~condition*block+(1|randomID)+(condition|displayed), data=df.error,
+#                       control = lmerControl(optimizer="bobyqa")) # singular
+# error.dist.block4<-lmer(dist~condition*block+(block|randomID)+(1|displayed), data=df.error,
+#                       control = lmerControl(optimizer="bobyqa")) 
+# error.dist.block5<-lmer(dist~condition*block+(1|randomID)+(block|displayed), data=df.error,
+#                       control = lmerControl(optimizer="bobyqa")) # singular
+
+# anova(error.dist.block1, error.dist.block2) # ns
+# anova(error.dist.block1, error.dist.block4) # ns
+
+# model 1 best model
+
+tab_model(error.dist1, error.dist.block1, transform = NULL, show.stat = T,
+          dv.labels = c("Overall", "Block as Factor"))
+```
+
+<p></p>
+
+#### Overall
+
+```{r}
+graph1<-ddply(df.error, c("randomID", "condition"), function(df)
+  return(c(dep.avg=mean(df$dist))))
+
+graph2<-ddply(graph1, c("condition"), function(df)
+  return(c(dep.avg=mean(df$dep.avg), 
+           dep.sd=sd(df$dep.avg), 
+           dep.count=length(df$dep.avg))))
+
+# png("E2_Location Accuracy.png",
+#     width = 200, height = 120, res=300, unit="mm",
+#      bg = "white",
+#     type = "cairo")
+
+## graph
+ggplot(graph2, aes(x=condition, y=dep.avg, colour=condition))+
+  geom_point(size=6, shape=17, position = position_dodge(0.5))+
+  geom_point(data=graph1, aes(x=condition, y=dep.avg, colour=condition), 
+             shape = 16, position=position_jitterdodge(dodge.width=.5, 
+                                                       jitter.width = 0.35, 
+                                                       jitter.height = 0.01), alpha = 0.25)+
+  # geom_line()+
+  # stat_smooth(method="glm", method.args=list(family="binomial"), se=FALSE)+
+  geom_errorbar(aes(ymax=dep.avg+dep.sd*qt(0.975,df=dep.count-1)/sqrt(dep.count),
+                    ymin=dep.avg-dep.sd*qt(0.975,df=dep.count-1)/sqrt(dep.count)),
+                width=0.05, position = position_dodge(0.5))+
+    plot.customization+
+
+  # scale_colour_manual(labels=c("maroon", "maroon","maroon","maroon"))
+  scale_colour_manual("Condition", values=c("Semantic"=wes_palettes$GrandBudapest1[1], 
+                                            "Scrambled"=wes_palettes$GrandBudapest2[4]))+
+  scale_y_continuous("Error Distance", breaks=seq(-20, 20, 0.5))+
+  scale_x_discrete("")+
+  coord_cartesian(ylim = c(1, max(graph1$dep.avg)))
+```
+
+#### By Block
+
+```{r}
+graph1<-ddply(df.error, c("randomID", "condition", "block"), function(df)
+  return(c(dep.avg=mean(df$dist))))
+
+graph2<-ddply(graph1, c("condition", "block"), function(df)
+  return(c(dep.avg=mean(df$dep.avg), 
+           dep.sd=sd(df$dep.avg), 
+           dep.count=length(df$dep.avg))))
+
+# png("E2_Location Accuracy.png",
+#     width = 200, height = 120, res=300, unit="mm",
+#      bg = "white",
+#     type = "cairo")
+
+## graph
+ggplot(graph2, aes(x=block, y=dep.avg, colour=condition))+
+  geom_point(size=6, shape=17, position = position_dodge(0.5))+
+  geom_point(data=graph1, aes(x=block, y=dep.avg, colour=condition), 
+             shape = 16, position=position_jitterdodge(dodge.width=.5, 
+                                                       jitter.width = 0.35, 
+                                                       jitter.height = 0.01), alpha = 0.25)+
+  # geom_line()+
+  # stat_smooth(method="glm", method.args=list(family="binomial"), se=FALSE)+
+  geom_errorbar(aes(ymax=dep.avg+dep.sd*qt(0.975,df=dep.count-1)/sqrt(dep.count),
+                    ymin=dep.avg-dep.sd*qt(0.975,df=dep.count-1)/sqrt(dep.count)),
+                width=0.05, position = position_dodge(0.5))+
+    plot.customization+
+
+  # scale_colour_manual(labels=c("maroon", "maroon","maroon","maroon"))
+  scale_colour_manual("Condition", values=c("Semantic"=wes_palettes$GrandBudapest1[1], 
+                                            "Scrambled"=wes_palettes$GrandBudapest2[4]))+
+  scale_y_continuous("Error Distance", breaks=seq(-20, 20, 0.5))+
+  scale_x_discrete("")+
+  coord_cartesian(ylim = c(1, max(graph1$dep.avg)))
+```
+
+
+
+
+### Substitution 
+
+```{r}
+mixup.mod0<-glmer(mixup~condition+(1|randomID), family = "binomial", data=df.error,
+                  control = glmerControl(optimizer="bobyqa")) 
+# mixup.mod1<-glmer(mixup~condition+(1|randomID)+(1|displayed), family = "binomial", data=df.error,
+#                   control = glmerControl(optimizer="bobyqa")) # singular
+
+# model 0 best model
+
+
+mixup.block.mod0<-glmer(mixup~condition*block+(1|randomID), family = "binomial", data=df.error,
+                  control = glmerControl(optimizer="bobyqa"))
+# mixup.block.mod1<-glmer(mixup~condition*block+(1|randomID)+(1|displayed), family = "binomial", data=df.error,
+#                   control = glmerControl(optimizer="bobyqa")) # singular
+
+# model 0 is best model
+
+tab_model(mixup.mod0, mixup.block.mod0, transform = NULL, show.stat = T,
+          dv.labels = c("Overall", "By Block"))
+```
+
+
+#### Overall
+
+
+```{r}
+graph1<-ddply(df.error, c("randomID", "condition"), function(df)
+  return(c(dep.avg=mean(df$mixup))))
+
+graph2<-ddply(graph1, c("condition"), function(df)
+  return(c(dep.avg=mean(df$dep.avg), 
+           dep.sd=sd(df$dep.avg), 
+           dep.count=length(df$dep.avg))))
+
+# png("E2_Location Accuracy.png",
+#     width = 200, height = 120, res=300, unit="mm",
+#      bg = "white",
+#     type = "cairo")
+
+## graph
+ggplot(graph2, aes(x=condition, y=dep.avg, colour=condition))+
+  geom_point(size=6, shape=17, position = position_dodge(0.5))+
+  geom_point(data=graph1, aes(x=condition, y=dep.avg, colour=condition), 
+             shape = 16, position=position_jitterdodge(dodge.width=.5, 
+                                                       jitter.width = 0.35, 
+                                                       jitter.height = 0.01), alpha = 0.25)+
+  # geom_line()+
+  # stat_smooth(method="glm", method.args=list(family="binomial"), se=FALSE)+
+  geom_errorbar(aes(ymax=dep.avg+dep.sd*qt(0.975,df=dep.count-1)/sqrt(dep.count),
+                    ymin=dep.avg-dep.sd*qt(0.975,df=dep.count-1)/sqrt(dep.count)),
+                width=0.05, position = position_dodge(0.5))+
+    plot.customization+
+
+  # scale_colour_manual(labels=c("maroon", "maroon","maroon","maroon"))
+  scale_colour_manual("Condition", values=c("Semantic"=wes_palettes$GrandBudapest1[1], 
+                                            "Scrambled"=wes_palettes$GrandBudapest2[4]))+
+  scale_y_continuous("Proportion of Substitution Errors", breaks=seq(-1, 1, 0.1))+
+  scale_x_discrete("")+
+  coord_cartesian(ylim = c(0, 1))
+```
+
+#### By Block
+
+```{r}
+graph1<-ddply(df.error, c("randomID", "condition", "block"), function(df)
+  return(c(dep.avg=mean(df$mixup))))
+
+graph2<-ddply(graph1, c("condition", "block"), function(df)
+  return(c(dep.avg=mean(df$dep.avg), 
+           dep.sd=sd(df$dep.avg), 
+           dep.count=length(df$dep.avg))))
+
+# png("E2_Location Accuracy.png",
+#     width = 200, height = 120, res=300, unit="mm",
+#      bg = "white",
+#     type = "cairo")
+
+## graph
+ggplot(graph2, aes(x=block, y=dep.avg, colour=condition))+
+  geom_point(size=6, shape=17, position = position_dodge(0.5))+
+  geom_point(data=graph1, aes(x=block, y=dep.avg, colour=condition), 
+             shape = 16, position=position_jitterdodge(dodge.width=.5, 
+                                                       jitter.width = 0.35, 
+                                                       jitter.height = 0.01), alpha = 0.25)+
+  # geom_line()+
+  # stat_smooth(method="glm", method.args=list(family="binomial"), se=FALSE)+
+  geom_errorbar(aes(ymax=dep.avg+dep.sd*qt(0.975,df=dep.count-1)/sqrt(dep.count),
+                    ymin=dep.avg-dep.sd*qt(0.975,df=dep.count-1)/sqrt(dep.count)),
+                width=0.05, position = position_dodge(0.5))+
+    plot.customization+
+
+  # scale_colour_manual(labels=c("maroon", "maroon","maroon","maroon"))
+  scale_colour_manual("Condition", values=c("Semantic"=wes_palettes$GrandBudapest1[1], 
+                                            "Scrambled"=wes_palettes$GrandBudapest2[4]))+
+  scale_y_continuous("Proportion of Substitution Errors", breaks=seq(-1, 1, 0.1))+
+  scale_x_discrete("")+
+  coord_cartesian(ylim = c(0, 1))
+```
+
+
+### Near Errors
+
+
+```{r}
+nearfar.mod1<-glmer(near.error~condition+(1|randomID)+(1|displayed), family = "binomial", data=df.error,
+                  control = glmerControl(optimizer="bobyqa"))
+# nearfar.mod2<-glmer(near.error~condition+(condition|randomID)+(1|displayed), family = "binomial", data=df.error,
+#                   control = glmerControl(optimizer="bobyqa"))
+# nearfar.mod3<-glmer(near.error~condition+(1|randomID)+(condition|displayed), family = "binomial", data=df.error,
+#                   control = glmerControl(optimizer="bobyqa")) # singular
+
+# anova(nearfar.mod1, nearfar.mod2) # ns
+# model 1 is best model
+
+
+nearfar.block.mod1<-glmer(near.error~condition*block+(1|randomID)+(1|displayed), family = "binomial", data=df.error,
+                  control = glmerControl(optimizer="bobyqa"))
+# nearfar.block.mod2<-glmer(near.error~condition*block+(condition|randomID)+(1|displayed), family = "binomial", data=df.error,
+#                   control = glmerControl(optimizer="bobyqa"))
+# nearfar.block.mod3<-glmer(near.error~condition*block+(1|randomID)+(condition|displayed), family = "binomial", data=df.error,
+#                   control = glmerControl(optimizer="bobyqa")) # singular
+# nearfar.block.mod4<-glmer(near.error~condition*block+(block|randomID)+(1|displayed), family = "binomial", data=df.error,
+#                   control = glmerControl(optimizer="bobyqa")) 
+# nearfar.block.mod5<-glmer(near.error~condition*block+(1|randomID)+(block|displayed), family = "binomial", data=df.error,
+#                   control = glmerControl(optimizer="bobyqa")) # singular
+
+# anova(nearfar.block.mod1, nearfar.block.mod2) # ns
+# anova(nearfar.block.mod1, nearfar.block.mod4) # ns
+
+# model 1 is best model
+
+tab_model(nearfar.mod1,nearfar.block.mod1, transform = NULL, show.stat = T,
+          dv.labels = c("Overall", "By Block"))
+```
+
+
+#### Overall
+
+
+```{r}
+graph1<-ddply(df.error, c("randomID", "condition"), function(df)
+  return(c(dep.avg=mean(df$near.error))))
+
+graph2<-ddply(graph1, c("condition"), function(df)
+  return(c(dep.avg=mean(df$dep.avg), 
+           dep.sd=sd(df$dep.avg), 
+           dep.count=length(df$dep.avg))))
+
+# png("E2_Location Accuracy.png",
+#     width = 200, height = 120, res=300, unit="mm",
+#      bg = "white",
+#     type = "cairo")
+
+## graph
+ggplot(graph2, aes(x=condition, y=dep.avg, colour=condition))+
+  geom_point(size=6, shape=17, position = position_dodge(0.5))+
+  geom_point(data=graph1, aes(x=condition, y=dep.avg, colour=condition), 
+             shape = 16, position=position_jitterdodge(dodge.width=.5, 
+                                                       jitter.width = 0.35, 
+                                                       jitter.height = 0.01), alpha = 0.25)+
+  # geom_line()+
+  # stat_smooth(method="glm", method.args=list(family="binomial"), se=FALSE)+
+  geom_errorbar(aes(ymax=dep.avg+dep.sd*qt(0.975,df=dep.count-1)/sqrt(dep.count),
+                    ymin=dep.avg-dep.sd*qt(0.975,df=dep.count-1)/sqrt(dep.count)),
+                width=0.05, position = position_dodge(0.5))+
+    plot.customization+
+
+  # scale_colour_manual(labels=c("maroon", "maroon","maroon","maroon"))
+  scale_colour_manual("Condition", values=c("Semantic"=wes_palettes$GrandBudapest1[1], 
+                                            "Scrambled"=wes_palettes$GrandBudapest2[4]))+
+  scale_y_continuous("Proportion of Near Errors", breaks=seq(-1, 1, 0.1))+
+  scale_x_discrete("")+
+  coord_cartesian(ylim = c(0, 1))
+```
+
+#### By Block
+
+```{r}
+graph1<-ddply(df.error, c("randomID", "condition", "block"), function(df)
+  return(c(dep.avg=mean(df$near.error))))
+
+graph2<-ddply(graph1, c("condition", "block"), function(df)
+  return(c(dep.avg=mean(df$dep.avg), 
+           dep.sd=sd(df$dep.avg), 
+           dep.count=length(df$dep.avg))))
+
+# png("E2_Location Accuracy.png",
+#     width = 200, height = 120, res=300, unit="mm",
+#      bg = "white",
+#     type = "cairo")
+
+## graph
+ggplot(graph2, aes(x=block, y=dep.avg, colour=condition))+
+  geom_point(size=6, shape=17, position = position_dodge(0.5))+
+  geom_point(data=graph1, aes(x=block, y=dep.avg, colour=condition), 
+             shape = 16, position=position_jitterdodge(dodge.width=.5, 
+                                                       jitter.width = 0.35, 
+                                                       jitter.height = 0.01), alpha = 0.25)+
+  # geom_line()+
+  # stat_smooth(method="glm", method.args=list(family="binomial"), se=FALSE)+
+  geom_errorbar(aes(ymax=dep.avg+dep.sd*qt(0.975,df=dep.count-1)/sqrt(dep.count),
+                    ymin=dep.avg-dep.sd*qt(0.975,df=dep.count-1)/sqrt(dep.count)),
+                width=0.05, position = position_dodge(0.5))+
+    plot.customization+
+
+  # scale_colour_manual(labels=c("maroon", "maroon","maroon","maroon"))
+  scale_colour_manual("Condition", values=c("Semantic"=wes_palettes$GrandBudapest1[1], 
+                                            "Scrambled"=wes_palettes$GrandBudapest2[4]))+
+  scale_y_continuous("Proportion of Near Errors", breaks=seq(-1, 1, 0.1))+
+  scale_x_discrete("")+
+  coord_cartesian(ylim = c(0, 1))
+```
+
+
+
+
+
+## Metacognition
+
+### Display Preference
+
+```{r}
+table(df.sum$grid.prefer)
+chisq.test(table(df.sum$grid.prefer))
+```
+
+```{r}
+df.sum %>%
+  group_by(grid.prefer) %>%
+  dplyr::summarise(count=n()) %>%
+  ungroup() %>%
+  dplyr::mutate(total=sum(count), prop=count/total) %>%
+  as.data.frame() -> pref.table
+```
+
+
+
+
+
+```{r}
+ggplot(pref.table, aes(x="Display Preference", y=prop, fill=grid.prefer))+
+  geom_bar(stat="identity", position = "fill")+
+  plot.customization+
+  scale_fill_manual("", values=c("Semantic"=wes_palettes$GrandBudapest1[1],
+                                            "Scrambled"=wes_palettes$GrandBudapest2[4]))+
+  scale_y_continuous("Proportion", breaks=seq(0, 1, 0.1))+
+  scale_x_discrete("")
+```
+
+
+### Display Preference as a function of Task Performance
+
+#### T-Test
+
+```{r}
+df.sum$semantic.advantage<-df.sum$Semantic-df.sum$Scrambled
+
+t.test(df.sum$semantic.advantage~df.sum$grid.prefer)
+```
+
+
+
+```{r}
+graph2<-ddply(df.sum, c("grid.prefer"), function(df)
+  return(c(dep.avg=mean(df$semantic.advantage, na.rm=T), 
+           dep.sd=sd(df$semantic.advantage, na.rm = T), 
+           dep.count=length(df$semantic.advantage))))
+
+# png("E2_Location Accuracy.png",
+#     width = 200, height = 120, res=300, unit="mm",
+#      bg = "white",
+#     type = "cairo")
+
+## graph
+ggplot(graph2, aes(x=grid.prefer, y=dep.avg, colour=grid.prefer))+
+  geom_point(size=6, shape=17, position = position_dodge(0.5))+
+  geom_point(data=df.sum, aes(x=grid.prefer, y=semantic.advantage, colour=grid.prefer), 
+             shape = 16, position=position_jitterdodge(dodge.width=.5, 
+                                                       jitter.width = 0.35, 
+                                                       jitter.height = 0.01), alpha = 0.25)+
+  geom_errorbar(aes(ymax=dep.avg+dep.sd*qt(0.975,df=dep.count-1)/sqrt(dep.count),
+                    ymin=dep.avg-dep.sd*qt(0.975,df=dep.count-1)/sqrt(dep.count)),
+                width=0.05, position = position_dodge(0.5))+
+    plot.customization+
+  scale_colour_manual("Condition", values=c("Semantic"=wes_palettes$GrandBudapest1[1], 
+                                            "Scrambled"=wes_palettes$GrandBudapest2[4]))+
+  scale_y_continuous("Semantic Advantage\n(Semantic - Scrambled)", breaks=seq(-1, 1, 0.1))+
+  scale_x_discrete("Display Preference")+
+  geom_hline(yintercept = 0, linetype="longdash", colour="grey70")
+
+```
+
+#### Logistic Regression
+
+Running this analysis to better understand the inflection point
+
+```{r}
+df.sum$grid.prefer.num<-ifelse(df.sum$grid.prefer=="Semantic", 1, 0)
+
+gridprefer.mod<-glm(grid.prefer.num~semantic.advantage, family = "binomial", data=df.sum)
+tab_model(gridprefer.mod, show.stat = T, transform = NULL)
+
+```
+
+
+```{r}
+ggplot(df.sum, aes(x=semantic.advantage, y=grid.prefer.num))+ 
+  geom_jitter(width = 0.05, height = 0.05, alpha=0.2)+
+  stat_smooth(method="glm", method.args=list(family="binomial"), se=FALSE)+
+  plot.customization+
+  # scale_colour_manual(labels=c("maroon", "maroon","maroon","maroon"))
+  geom_hline(yintercept = .5, linetype="dotted")+
+  geom_vline(xintercept = c(0, -0.139) , linetype="dotted")+
+  scale_x_continuous("Semantic Advantage\n(Semantic - Scrambled)", breaks=seq(-1, 1, 0.1))+
+  scale_y_continuous("Display Preference\n(1 = Semantic; 0 = Scrambled)", breaks=seq(-1, 1, 0.1))+
+  coord_cartesian(ylim = c(0, 1)) 
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
